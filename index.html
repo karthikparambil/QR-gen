@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR Forge — Static QR Generator</title>
+<style>
+  :root{
+    --bg: #0b0f0e;
+    --panel: #101614;
+    --panel2: #141c1a;
+    --line: #223330;
+    --accent: #39ff9c;
+    --accent-dim: #1f8a5c;
+    --text: #d7e6df;
+    --text-dim: #7f958c;
+    --danger: #ff5c5c;
+    --mono: 'JetBrains Mono','Fira Code',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{ margin:0; padding:0; }
+  body{
+    min-height:100vh; background:
+      radial-gradient(circle at 15% 10%, rgba(57,255,156,0.05), transparent 40%),
+      var(--bg);
+    color:var(--text); font-family:var(--sans);
+    display:flex; justify-content:center;
+    padding:clamp(16px,4vw,40px) clamp(12px,3vw,20px);
+  }
+  .app{ width:100%; max-width:960px; }
+  .header{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:8px; }
+  .header h1{ font-family:var(--mono); font-size:clamp(16px,4vw,20px); font-weight:600; letter-spacing:0.5px; margin:0; color:var(--text); }
+  .header h1 span{ color:var(--accent); }
+  .header .tag{ font-family:var(--mono); font-size:11px; color:var(--text-dim); border:1px solid var(--line); padding:4px 10px; border-radius:4px; white-space:nowrap; }
+  .grid{ display:grid; grid-template-columns:1.1fr 0.9fr; gap:18px; align-items:start; }
+  @media (max-width:760px){ .grid{ grid-template-columns:1fr; } }
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:clamp(14px,3vw,22px); min-width:0; }
+  .section-label{ font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:var(--accent-dim); margin:0 0 14px; display:flex; align-items:center; gap:8px; }
+  .section-label:not(:first-child){ margin-top:22px; }
+  .section-label::before{ content:''; width:6px; height:6px; background:var(--accent); border-radius:50%; box-shadow:0 0 6px var(--accent); flex-shrink:0; }
+  .field{ margin-bottom:16px; }
+  .field label{ display:block; font-size:12px; color:var(--text-dim); margin-bottom:6px; font-family:var(--mono); }
+  input[type=text], textarea, select{
+    width:100%; background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    padding:9px 11px; border-radius:6px; font-family:var(--mono); font-size:13px; outline:none;
+  }
+  textarea{ resize:vertical; min-height:56px; }
+  input[type=text]:focus, textarea:focus, select:focus{ border-color:var(--accent-dim); }
+  .row{ display:flex; gap:12px; flex-wrap:wrap; }
+  .row > .field{ flex:1; min-width:120px; }
+  input[type=color]{ -webkit-appearance:none; width:44px; height:34px; border:1px solid var(--line); border-radius:6px; background:var(--panel2); padding:2px; cursor:pointer; flex-shrink:0; }
+  input[type=color]::-webkit-color-swatch{ border-radius:4px; border:none; }
+  .color-row{ display:flex; align-items:center; gap:10px; }
+  .color-row span{ font-family:var(--mono); font-size:12px; color:var(--text-dim); }
+  input[type=range]{ width:100%; accent-color:var(--accent); }
+  .toggle-group{ display:flex; gap:6px; flex-wrap:wrap; }
+  .toggle-btn{ flex:1 1 auto; min-width:64px; padding:8px 6px; border:1px solid var(--line); background:var(--panel2); color:var(--text-dim); font-family:var(--mono); font-size:11px; border-radius:6px; cursor:pointer; text-align:center; user-select:none; }
+  .toggle-btn.active{ border-color:var(--accent); color:var(--accent); background:rgba(57,255,156,0.06); }
+  .preset-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .preset-btn{ padding:7px 12px; border:1px solid var(--line); background:var(--panel2); color:var(--text); font-family:var(--mono); font-size:11px; border-radius:20px; cursor:pointer; }
+  .preset-btn:hover{ border-color:var(--accent-dim); }
+  .file-drop{ display:block; border:1px dashed var(--line); border-radius:6px; padding:14px; text-align:center; font-family:var(--mono); font-size:12px; color:var(--text-dim); cursor:pointer; }
+  .file-drop:hover{ border-color:var(--accent-dim); }
+  .file-drop input{ display:none; }
+  .logo-status{ display:flex; align-items:center; justify-content:space-between; margin-top:8px; font-size:12px; font-family:var(--mono); color:var(--text-dim); gap:8px; }
+  .logo-status span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .logo-status button{ background:none; border:none; color:var(--danger); font-family:var(--mono); font-size:11px; cursor:pointer; flex-shrink:0; }
+  .preview-wrap{ display:flex; flex-direction:column; align-items:center; gap:16px; position:sticky; top:20px; }
+  @media (max-width:760px){ .preview-wrap{ position:static; } }
+  .canvas-frame{ background:#fff; padding:clamp(10px,3vw,18px); border-radius:12px; border:1px solid var(--line); box-shadow:0 0 0 1px rgba(57,255,156,0.08); max-width:100%; display:flex; align-items:center; justify-content:center; }
+  #qrContainer{ max-width:100%; }
+  #qrContainer canvas, #qrContainer img{ max-width:100%; height:auto; display:block; }
+  .actions{ display:flex; gap:10px; width:100%; flex-wrap:wrap; }
+  .btn{ flex:1 1 120px; padding:11px; border-radius:6px; font-family:var(--mono); font-size:12px; letter-spacing:0.5px; cursor:pointer; border:1px solid var(--line); background:var(--panel2); color:var(--text); text-transform:uppercase; }
+  .btn.primary{ background:var(--accent); color:#04140c; border-color:var(--accent); font-weight:600; }
+  .btn:hover{ border-color:var(--accent-dim); }
+  .meta{ font-family:var(--mono); font-size:11px; color:var(--text-dim); text-align:center; word-break:break-word; }
+  .footer-note{ font-family:var(--mono); font-size:11px; color:var(--text-dim); margin-top:20px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>QR<span>_</span>FORGE</h1>
+    <div class="tag">static · client-side · no data leaves browser</div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <p class="section-label">Payload</p>
+      <div class="field">
+        <label>Text / URL</label>
+        <textarea id="qrText" placeholder="https://example.com or any text">https://hackware.example</textarea>
+      </div>
+
+      <p class="section-label">Style presets</p>
+      <div class="preset-row">
+        <button class="preset-btn" data-preset="classic">Classic</button>
+        <button class="preset-btn" data-preset="rounded">Rounded</button>
+        <button class="preset-btn" data-preset="dots">Dots</button>
+        <button class="preset-btn" data-preset="classy">Classy</button>
+        <button class="preset-btn" data-preset="terminal">Terminal</button>
+      </div>
+
+      <div class="field">
+        <label>Module shape</label>
+        <div class="toggle-group" id="dotStyleGroup">
+          <div class="toggle-btn active" data-val="square">Square</div>
+          <div class="toggle-btn" data-val="dots">Dots</div>
+          <div class="toggle-btn" data-val="rounded">Rounded</div>
+          <div class="toggle-btn" data-val="classy">Classy</div>
+          <div class="toggle-btn" data-val="classy-rounded">Classy+</div>
+          <div class="toggle-btn" data-val="extra-rounded">Pillow</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Corner frame</label>
+        <div class="toggle-group" id="cornerSquareGroup">
+          <div class="toggle-btn active" data-val="square">Square</div>
+          <div class="toggle-btn" data-val="extra-rounded">Rounded</div>
+          <div class="toggle-btn" data-val="dot">Dot</div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Corner dot</label>
+        <div class="toggle-group" id="cornerDotGroup">
+          <div class="toggle-btn active" data-val="square">Square</div>
+          <div class="toggle-btn" data-val="dot">Dot</div>
+        </div>
+      </div>
+
+      <p class="section-label">Appearance</p>
+      <div class="row">
+        <div class="field">
+          <label>Foreground</label>
+          <div class="color-row"><input type="color" id="fgColor" value="#0b0f0e"><span>Modules</span></div>
+        </div>
+        <div class="field">
+          <label>Background</label>
+          <div class="color-row"><input type="color" id="bgColor" value="#ffffff"><span>Canvas</span></div>
+        </div>
+      </div>
+      <div class="field">
+        <label>Size — <span id="sizeVal">400</span>px</label>
+        <input type="range" id="sizeRange" min="200" max="800" step="20" value="400">
+      </div>
+      <div class="field">
+        <label>Error correction (higher = more logo-safe)</label>
+        <select id="ecLevel">
+          <option value="L">L — 7% recovery</option>
+          <option value="M">M — 15% recovery</option>
+          <option value="Q" selected>Q — 25% recovery</option>
+          <option value="H">H — 30% recovery</option>
+        </select>
+      </div>
+
+      <p class="section-label">Logo overlay</p>
+      <label class="file-drop" for="logoInput">
+        <span id="logoDropText">Click to upload logo (PNG/SVG, transparent bg recommended)</span>
+        <input type="file" id="logoInput" accept="image/*">
+      </label>
+      <div class="logo-status" id="logoStatus" style="display:none;">
+        <span id="logoName">logo.png</span>
+        <button id="logoClear">remove</button>
+      </div>
+      <div class="field" style="margin-top:14px;">
+        <label>Logo size — <span id="logoSizeVal">22</span>% of QR width</label>
+        <input type="range" id="logoSizeRange" min="10" max="35" step="1" value="22">
+      </div>
+    </div>
+
+    <div class="preview-wrap">
+      <div class="canvas-frame">
+        <div id="qrContainer"></div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="dlPNG">Download PNG</button>
+        <button class="btn primary" id="dlSVG">Download SVG</button>
+      </div>
+      <div class="meta" id="metaInfo">400×400 · EC:Q · no logo</div>
+    </div>
+  </div>
+  <p class="footer-note">Static QR only — payload is baked in at generation time, not a redirect. Regenerate and redistribute if the destination changes.</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js"></script>
+<script>
+let logoDataUrl = null;
+let dotStyle = 'square';
+let cornerSquareStyle = 'square';
+let cornerDotStyle = 'square';
+
+const qrText = document.getElementById('qrText');
+const fgColor = document.getElementById('fgColor');
+const bgColor = document.getElementById('bgColor');
+const sizeRange = document.getElementById('sizeRange');
+const sizeVal = document.getElementById('sizeVal');
+const ecLevel = document.getElementById('ecLevel');
+const logoSizeRange = document.getElementById('logoSizeRange');
+const logoSizeVal = document.getElementById('logoSizeVal');
+const metaInfo = document.getElementById('metaInfo');
+const container = document.getElementById('qrContainer');
+
+function buildOptions(){
+  const size = parseInt(sizeRange.value, 10);
+  const opts = {
+    width: size,
+    height: size,
+    type: 'canvas',
+    data: qrText.value.trim() || ' ',
+    margin: 8,
+    qrOptions: { errorCorrectionLevel: ecLevel.value },
+    dotsOptions: { color: fgColor.value, type: dotStyle },
+    backgroundOptions: { color: bgColor.value },
+    cornersSquareOptions: { type: cornerSquareStyle, color: fgColor.value },
+    cornersDotOptions: { type: cornerDotStyle, color: fgColor.value }
+  };
+  if (logoDataUrl){
+    opts.image = logoDataUrl;
+    opts.imageOptions = {
+      crossOrigin: 'anonymous',
+      imageSize: parseInt(logoSizeRange.value, 10) / 100,
+      margin: 6,
+      hideBackgroundDots: true
+    };
+  }
+  return opts;
+}
+
+let qrCode = new QRCodeStyling(buildOptions());
+qrCode.append(container);
+
+function render(){
+  qrCode.update(buildOptions());
+  const size = sizeRange.value;
+  metaInfo.textContent = `${size}×${size} · EC:${ecLevel.value}${logoDataUrl ? ' · logo embedded' : ' · no logo'}`;
+}
+
+[qrText, fgColor, bgColor, ecLevel].forEach(el => el.addEventListener('input', render));
+sizeRange.addEventListener('input', () => { sizeVal.textContent = sizeRange.value; render(); });
+logoSizeRange.addEventListener('input', () => { logoSizeVal.textContent = logoSizeRange.value; render(); });
+
+function wireToggleGroup(groupId, setter){
+  const group = document.getElementById(groupId);
+  group.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      group.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      setter(btn.dataset.val);
+      render();
+    });
+  });
+}
+wireToggleGroup('dotStyleGroup', v => dotStyle = v);
+wireToggleGroup('cornerSquareGroup', v => cornerSquareStyle = v);
+wireToggleGroup('cornerDotGroup', v => cornerDotStyle = v);
+
+function setActive(groupId, val){
+  const group = document.getElementById(groupId);
+  group.querySelectorAll('.toggle-btn').forEach(b => b.classList.toggle('active', b.dataset.val === val));
+}
+
+const presets = {
+  classic:  { dot:'square',         corner:'square',        cornerDot:'square' },
+  rounded:  { dot:'rounded',        corner:'extra-rounded', cornerDot:'dot'    },
+  dots:     { dot:'dots',           corner:'dot',            cornerDot:'dot'    },
+  classy:   { dot:'classy-rounded', corner:'extra-rounded', cornerDot:'dot'    },
+  terminal: { dot:'square',         corner:'square',        cornerDot:'square' }
+};
+
+document.querySelectorAll('.preset-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = presets[btn.dataset.preset];
+    dotStyle = p.dot; cornerSquareStyle = p.corner; cornerDotStyle = p.cornerDot;
+    setActive('dotStyleGroup', p.dot);
+    setActive('cornerSquareGroup', p.corner);
+    setActive('cornerDotGroup', p.cornerDot);
+    if (btn.dataset.preset === 'terminal'){
+      fgColor.value = '#39ff9c'; bgColor.value = '#0b0f0e';
+    }
+    render();
+  });
+});
+
+const logoInput = document.getElementById('logoInput');
+const logoStatus = document.getElementById('logoStatus');
+const logoName = document.getElementById('logoName');
+const logoDropText = document.getElementById('logoDropText');
+const logoClear = document.getElementById('logoClear');
+
+logoInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    logoDataUrl = ev.target.result;
+    logoName.textContent = file.name;
+    logoStatus.style.display = 'flex';
+    logoDropText.textContent = 'Replace logo';
+    if (ecLevel.value !== 'H') ecLevel.value = 'H';
+    render();
+  };
+  reader.readAsDataURL(file);
+});
+
+logoClear.addEventListener('click', () => {
+  logoDataUrl = null;
+  logoInput.value = '';
+  logoStatus.style.display = 'none';
+  logoDropText.textContent = 'Click to upload logo (PNG/SVG, transparent bg recommended)';
+  render();
+});
+
+document.getElementById('dlPNG').addEventListener('click', () => {
+  qrCode.download({ name: 'qr-code', extension: 'png' });
+});
+document.getElementById('dlSVG').addEventListener('click', () => {
+  const svgOpts = buildOptions();
+  svgOpts.type = 'svg';
+  const svgCode = new QRCodeStyling(svgOpts);
+  svgCode.download({ name: 'qr-code', extension: 'svg' });
+});
+
+render();
+</script>
+</body>
+</html>
